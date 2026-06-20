@@ -1,0 +1,73 @@
+{
+  "id": "domain-monitor",
+  "name": "Domain Monitor",
+  "version": "0.1.0",
+  "summary": "HTTP, DNS, screenshot, log and Namecheap DNS planning routes for urirun.",
+  "repository": "https://github.com/if-uri/urirun-connector-domain-monitor",
+  "install": "pip install git+https://github.com/if-uri/urirun-connector-domain-monitor.git@v0.1.0",
+  "routes": [
+    "monitor://host/http/query/status",
+    "dns://host/records/query/current",
+    "dns://host/records/query/expected",
+    "dns://host/records/command/plan",
+    "dns://host/records/command/backup",
+    "dns://host/records/command/apply",
+    "browser://host/page/command/screenshot",
+    "log://host/daily/command/write",
+    "log://host/logs/query/recent",
+    "flow://host/domain/command/check",
+    "flow://host/daily/command/run"
+  ],
+  "adapterKinds": ["argv-template"],
+  "examples": [
+    {
+      "uri": "monitor://host/http/query/status",
+      "payload": {
+        "domain": "example.com",
+        "url": "https://example.com/"
+      }
+    },
+    {
+      "uri": "dns://host/records/command/plan",
+      "payload": {
+        "domain": "example.com",
+        "provider": "namecheap",
+        "current_records": "[{\"Name\":\"@\",\"Type\":\"A\",\"Address\":\"203.0.113.10\"}]",
+        "desired_records": "[{\"Name\":\"@\",\"Type\":\"A\",\"Address\":\"203.0.113.11\"}]"
+      }
+    },
+    {
+      "uri": "flow://host/domain/command/check",
+      "payload": {
+        "domain": "example.com",
+        "url": "https://example.com/",
+        "expected_a": "203.0.113.10"
+      }
+    }
+  ],
+  "flowExample": {
+    "task": {
+      "id": "daily-domain-check",
+      "title": "Check domain and prepare DNS plan"
+    },
+    "steps": [
+      {
+        "id": "status",
+        "uri": "monitor://host/http/query/status",
+        "payload": {
+          "domain": "example.com",
+          "url": "https://example.com/"
+        }
+      },
+      {
+        "id": "plan",
+        "uri": "dns://host/records/command/plan",
+        "payload": {
+          "provider": "namecheap",
+          "domain": "example.com"
+        },
+        "depends_on": ["status"]
+      }
+    ]
+  }
+}
