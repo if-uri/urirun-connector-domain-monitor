@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-06-20
+
+### Changed
+- Make the connector runtime self-contained for HTTP checks, DNS reads,
+  screenshot artifacts, logs and daily checks.
+- Stop importing `urirun.domain_monitor` and `urirun.host_db`; the connector
+  now owns the minimal runtime/storage it needs.
+
 ## [0.2.0] - 2026-06-20
 
 ### Changed

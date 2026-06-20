@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "urirun-connector-domain-monitor"
-version = "0.2.0"
+version = "0.2.1"
 description = "HTTP, DNS read and daily domain monitor connector for ifuri and urirun"
 readme = "README.md"
 requires-python = ">=3.10"

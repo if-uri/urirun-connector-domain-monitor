@@ -1,10 +1,10 @@
 {
   "id": "domain-monitor",
   "name": "Domain Monitor",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "summary": "HTTP, DNS read, screenshot, log and daily domain-check flow routes for urirun.",
   "repository": "https://github.com/if-uri/urirun-connector-domain-monitor",
-  "install": "pip install git+https://github.com/if-uri/urirun-connector-domain-monitor.git@v0.2.0",
+  "install": "pip install git+https://github.com/if-uri/urirun-connector-domain-monitor.git@v0.2.1",
   "routes": [
     "monitor://host/http/query/status",
     "monitor://host/dns/query/current",

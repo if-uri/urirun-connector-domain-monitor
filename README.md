@@ -19,7 +19,7 @@ def http_status_command(domain: str = "", url: str = ""):
 ## Install
 
 ```bash
-pip install "git+https://github.com/if-uri/urirun-connector-domain-monitor.git@v0.2.0"
+pip install "git+https://github.com/if-uri/urirun-connector-domain-monitor.git@v0.2.1"
 ```
 
 ## Use
@@ -47,6 +47,10 @@ urirun run 'monitor://host/dns/query/current' registry.json \
 Provider-specific DNS mutations are intentionally outside this connector.
 Use [`urirun-connector-namecheap-dns`](https://github.com/if-uri/urirun-connector-namecheap-dns)
 for `dns://host/records/command/plan`, backup and apply routes.
+
+The connector owns its HTTP/DNS runtime and lightweight SQLite log/check/artifact
+store. It does not import `urirun.domain_monitor`, `urirun.host_db` or
+`urirun.namecheap_dns` from the core runtime.
 
 ## Test
 
