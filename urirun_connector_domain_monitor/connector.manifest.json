@@ -1,8 +1,15 @@
 {
   "id": "domain-monitor",
   "name": "Domain Monitor",
+  "status": "available",
   "version": "0.2.1",
   "summary": "HTTP, DNS read, screenshot, log and daily domain-check flow routes for urirun.",
+  "uriSchemes": [
+    "monitor",
+    "browser",
+    "flow",
+    "log"
+  ],
   "repository": "https://github.com/if-uri/urirun-connector-domain-monitor",
   "install": {
     "mode": "urirun-extra",

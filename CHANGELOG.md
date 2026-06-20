@@ -5,6 +5,8 @@
 ### Added
 - Add follow-up tasks for IFURI-016 Docker matrix coverage and richer connector
   contract documentation.
+- Expose `urirun_bindings()` through the `urirun.bindings` entry-point group
+  and document `urirun discover` / `urirun list --entry-points`.
 
 ### Changed
 - Keep active runtime dependency and docs links on `github.com/if-uri/urirun`.

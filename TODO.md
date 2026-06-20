@@ -3,6 +3,8 @@
 - [x] Publish `if-uri/urirun-connector-domain-monitor`.
 - [x] Move Namecheap DNS URI bindings to `urirun-connector-namecheap-dns`.
 - [x] Move remaining domain monitor runtime code fully out of urirun core.
+- [x] Expose `urirun_bindings()` through the stable `urirun.bindings`
+      entry-point group.
 - [ ] Add this connector to IFURI-016 full host-node Docker matrix with
       `monitor://` checks, logs and artifacts.
 - [ ] Add compatibility examples that compose domain checks with provider-specific DNS connectors.

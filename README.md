@@ -44,6 +44,14 @@ urirun run 'monitor://host/dns/query/current' registry.json \
   --allow 'monitor://host/*'
 ```
 
+After installation, `urirun` can discover this connector automatically through
+the `urirun.bindings` entry-point group:
+
+```bash
+urirun discover --out connectors.bindings.json --registry-out connectors.registry.json
+urirun list --entry-points
+```
+
 Provider-specific DNS mutations are intentionally outside this connector.
 Use [`urirun-connector-namecheap-dns`](https://github.com/if-uri/urirun-connector-namecheap-dns)
 for `dns://host/records/command/plan`, backup and apply routes.
