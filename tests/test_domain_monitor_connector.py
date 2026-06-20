@@ -18,6 +18,7 @@ from urirun_connector_domain_monitor import (
     dns_current,
     domain_check,
     http_status,
+    recent_checks,
     urirun_bindings,
 )
 from urirun_connector_domain_monitor.cli import main
@@ -94,9 +95,8 @@ def test_domain_check_writes_host_db() -> None:
         db = str(Path(tmp) / "host.db")
         result = domain_check(domain="localhost", url=url, db=db, execute=True, create_repair_ticket=False)
         assert result["ok"] is True
-        from urirun import host_db
 
-        assert host_db.recent_checks(db, subject="localhost")[0]["status"] == "ok"
+        assert recent_checks(db, subject="localhost")[0]["status"] == "ok"
 
 
 def test_cli_and_urirun_run_connector_uri(capsys) -> None:

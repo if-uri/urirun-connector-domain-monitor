@@ -7,6 +7,7 @@ from .core import (
     dns_expected,
     domain_check,
     http_status,
+    recent_checks,
     run_action,
     urirun_bindings,
 )
@@ -17,6 +18,7 @@ __all__ = [
     "dns_expected",
     "domain_check",
     "http_status",
+    "recent_checks",
     "run_action",
     "urirun_bindings",
 ]
