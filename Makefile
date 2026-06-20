@@ -12,10 +12,10 @@ smoke:
 	python3 -m urirun_connector_domain_monitor.cli bindings > "$$tmp/bindings.json"; \
 	urirun validate "$$tmp/bindings.json"; \
 	urirun compile "$$tmp/bindings.json" --out "$$tmp/registry.json"; \
-	urirun run 'dns://host/records/command/plan' "$$tmp/registry.json" \
-	  --payload '{"domain":"example.com","provider":"namecheap","current_records":"[{\"Name\":\"@\",\"Type\":\"A\",\"Address\":\"203.0.113.10\"}]","desired_records":"[{\"Name\":\"@\",\"Type\":\"A\",\"Address\":\"203.0.113.11\"}]"}' \
-	  --execute --allow 'dns://host/*' > "$$tmp/run.json"; \
-	python3 -c 'import json,sys; data=json.load(open(sys.argv[1])); assert data["ok"], data; out=json.loads(data["result"]["stdout"]); assert out["diff"]["changed"], out' "$$tmp/run.json"; \
+	urirun run 'monitor://host/dns/query/current' "$$tmp/registry.json" \
+	  --payload '{"domain":"example.com","current_records":"[{\"Name\":\"@\",\"Type\":\"A\",\"Address\":\"203.0.113.10\"}]"}' \
+	  --execute --allow 'monitor://host/*' > "$$tmp/run.json"; \
+	python3 -c 'import json,sys; data=json.load(open(sys.argv[1])); assert data["ok"], data; out=json.loads(data["result"]["stdout"]); assert out["records"][0]["Address"] == "203.0.113.10", out' "$$tmp/run.json"; \
 	python3 -m urirun.v2_mcp tools "$$tmp/registry.json" > "$$tmp/tools.json"; \
 	python3 -m urirun.v2_mcp card "$$tmp/registry.json" --name domain-monitor --url http://localhost/ > "$$tmp/card.json"
 

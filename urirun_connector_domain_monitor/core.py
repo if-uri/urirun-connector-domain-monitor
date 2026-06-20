@@ -12,7 +12,6 @@ import urirun
 
 CONNECTOR_ID = "domain-monitor"
 MONITOR = urirun.connector(CONNECTOR_ID, scheme="monitor")
-DNS = urirun.connector(CONNECTOR_ID, scheme="dns")
 BROWSER = urirun.connector(CONNECTOR_ID, scheme="browser")
 LOG = urirun.connector(CONNECTOR_ID, scheme="log")
 FLOW = urirun.connector(CONNECTOR_ID, scheme="flow")
@@ -34,12 +33,6 @@ def _domain_monitor():
     from urirun import domain_monitor
 
     return domain_monitor
-
-
-def _namecheap_dns():
-    from urirun import namecheap_dns
-
-    return namecheap_dns
 
 
 def _host_db():
@@ -68,43 +61,6 @@ def _int_or_none(value: Any) -> int | None:
     if value in (None, "", 0, "0"):
         return None
     return int(value)
-
-
-def _payload_records(
-    *,
-    current_records: str = "",
-    desired_records: str = "",
-    ensure_records: str = "",
-    remove_records: str = "",
-    plan: str = "",
-    backup_uri: str = "",
-    confirm: bool | str = False,
-    mock_apply: bool | str = False,
-    allow_current_drift: bool | str = False,
-    backup_dir: str = "",
-    profile: str = "",
-) -> dict[str, Any]:
-    payload: dict[str, Any] = {}
-    if current_records:
-        payload["current_records"] = _json_value(current_records, [])
-    if desired_records:
-        payload["desired_records"] = _json_value(desired_records, [])
-    if ensure_records:
-        payload["ensure_records"] = _json_value(ensure_records, [])
-    if remove_records:
-        payload["remove_records"] = _json_value(remove_records, [])
-    if plan:
-        payload["plan"] = _json_value(plan, {})
-    if backup_uri:
-        payload["backup_uri"] = backup_uri
-    if backup_dir:
-        payload["backup_dir"] = backup_dir
-    if profile:
-        payload["profile"] = profile
-    payload["confirm"] = _bool(confirm)
-    payload["mock_apply"] = _bool(mock_apply)
-    payload["allow_current_drift"] = _bool(allow_current_drift)
-    return payload
 
 
 def _expected_payload(expected_records: str = "", expected_a: str = "", expected_aaaa: str = "") -> dict[str, Any]:
@@ -136,10 +92,24 @@ def http_status(domain: str = "", url: str = "", timeout: float = 10.0, expected
 
 def dns_current(domain: str = "", provider: str = "", record_types: str = "", current_records: str = "", profile: str = "") -> dict[str, Any]:
     target = domain or "localhost"
-    payload = _payload_records(current_records=current_records, profile=profile)
-    if provider.lower() == "namecheap":
-        records = _namecheap_dns().current_records(target, payload)
-        return {"ok": True, "connector": CONNECTOR_ID, "type": "namecheap-dns", "domain": target, "records": records}
+    if current_records:
+        return {
+            "ok": True,
+            "connector": CONNECTOR_ID,
+            "type": "domain-monitor",
+            "domain": target,
+            "records": _json_value(current_records, []),
+            "source": "payload",
+            "profile": profile,
+        }
+    if provider:
+        return {
+            "ok": False,
+            "connector": CONNECTOR_ID,
+            "type": "domain-monitor",
+            "domain": target,
+            "error": f"provider={provider} is handled by a provider-specific connector",
+        }
     result = _domain_monitor().dns_records(target, _split_csv(record_types) or None)
     return {"ok": bool(result.get("ok")), "connector": CONNECTOR_ID, "type": "domain-monitor", **result}
 
@@ -147,66 +117,6 @@ def dns_current(domain: str = "", provider: str = "", record_types: str = "", cu
 def dns_expected(expected_records: str = "", expected_a: str = "", expected_aaaa: str = "") -> dict[str, Any]:
     payload = _expected_payload(expected_records=expected_records, expected_a=expected_a, expected_aaaa=expected_aaaa)
     return {"ok": True, "connector": CONNECTOR_ID, "type": "domain-monitor", "expectedRecords": _domain_monitor().expected_records(payload)}
-
-
-def dns_plan(
-    domain: str = "",
-    provider: str = "namecheap",
-    current_records: str = "",
-    desired_records: str = "",
-    ensure_records: str = "",
-    remove_records: str = "",
-    profile: str = "",
-) -> dict[str, Any]:
-    target = domain or "localhost"
-    payload = _payload_records(
-        current_records=current_records,
-        desired_records=desired_records,
-        ensure_records=ensure_records,
-        remove_records=remove_records,
-        profile=profile,
-    )
-    if provider.lower() != "namecheap":
-        current = dns_current(domain=target)
-        return {"ok": current.get("ok", False), "connector": CONNECTOR_ID, "type": "domain-monitor", "action": "plan", "domain": target, "current": current}
-    return {"connector": CONNECTOR_ID, "action": "plan", **_namecheap_dns().plan(target, payload)}
-
-
-def dns_backup(domain: str = "", provider: str = "namecheap", current_records: str = "", backup_dir: str = "", db: str = "", profile: str = "") -> dict[str, Any]:
-    if provider.lower() != "namecheap":
-        raise ValueError("dns backup currently supports provider=namecheap")
-    target = domain or "localhost"
-    payload = _payload_records(current_records=current_records, backup_dir=backup_dir, profile=profile)
-    records = _namecheap_dns().current_records(target, payload)
-    artifact = _namecheap_dns().backup(target, records, db=db or None, out_dir=backup_dir or None)
-    return {"ok": True, "connector": CONNECTOR_ID, "type": "namecheap-dns", "action": "backup", "domain": target, "backup": artifact}
-
-
-def dns_apply(
-    domain: str = "",
-    provider: str = "namecheap",
-    current_records: str = "",
-    desired_records: str = "",
-    plan: str = "",
-    backup_uri: str = "",
-    confirm: bool = False,
-    mock_apply: bool = True,
-    allow_current_drift: bool = False,
-    profile: str = "",
-) -> dict[str, Any]:
-    if provider.lower() != "namecheap":
-        raise ValueError("dns apply currently supports provider=namecheap")
-    payload = _payload_records(
-        current_records=current_records,
-        desired_records=desired_records,
-        plan=plan,
-        backup_uri=backup_uri,
-        confirm=confirm,
-        mock_apply=mock_apply,
-        allow_current_drift=allow_current_drift,
-        profile=profile,
-    )
-    return {"connector": CONNECTOR_ID, "action": "apply", **_namecheap_dns().apply(domain or "localhost", payload)}
 
 
 def screenshot(domain: str = "", url: str = "", db: str = "", screenshot_dir: str = "", reason: str = "manual", meta: str = "") -> dict[str, Any]:
@@ -292,9 +202,6 @@ def run_action(action: str, **kwargs: Any) -> dict[str, Any]:
         "http-status": http_status,
         "dns-current": dns_current,
         "dns-expected": dns_expected,
-        "dns-plan": dns_plan,
-        "dns-backup": dns_backup,
-        "dns-apply": dns_apply,
         "screenshot": screenshot,
         "log-write": log_write,
         "logs-recent": logs_recent,
@@ -311,29 +218,14 @@ def http_status_command(domain: str = "", url: str = "", timeout: float = 10.0, 
     return ["urirun-domain-monitor", "http-status", "--domain", "{domain}", "--url", "{url}", "--timeout", "{timeout}", "--expected-status", "{expected_status}"]
 
 
-@DNS.command("records/query/current", meta={"label": "Current DNS records"})
+@MONITOR.command("dns/query/current", meta={"label": "Current DNS records"})
 def dns_current_command(domain: str = "", provider: str = "", record_types: str = "", current_records: str = "", profile: str = "") -> list[str]:
     return ["urirun-domain-monitor", "dns-current", "--domain", "{domain}", "--provider", "{provider}", "--record-types", "{record_types}", "--current-records", "{current_records}", "--profile", "{profile}"]
 
 
-@DNS.command("records/query/expected", meta={"label": "Expected DNS records"})
+@MONITOR.command("dns/query/expected", meta={"label": "Expected DNS records"})
 def dns_expected_command(expected_records: str = "", expected_a: str = "", expected_aaaa: str = "") -> list[str]:
     return ["urirun-domain-monitor", "dns-expected", "--expected-records", "{expected_records}", "--expected-a", "{expected_a}", "--expected-aaaa", "{expected_aaaa}"]
-
-
-@DNS.command("records/command/plan", meta={"label": "Plan DNS changes"})
-def dns_plan_command(domain: str = "", provider: str = "namecheap", current_records: str = "", desired_records: str = "", ensure_records: str = "", remove_records: str = "", profile: str = "") -> list[str]:
-    return ["urirun-domain-monitor", "dns-plan", "--domain", "{domain}", "--provider", "{provider}", "--current-records", "{current_records}", "--desired-records", "{desired_records}", "--ensure-records", "{ensure_records}", "--remove-records", "{remove_records}", "--profile", "{profile}"]
-
-
-@DNS.command("records/command/backup", meta={"label": "Backup DNS records"})
-def dns_backup_command(domain: str = "", provider: str = "namecheap", current_records: str = "", backup_dir: str = "", db: str = "", profile: str = "") -> list[str]:
-    return ["urirun-domain-monitor", "dns-backup", "--domain", "{domain}", "--provider", "{provider}", "--current-records", "{current_records}", "--backup-dir", "{backup_dir}", "--db", "{db}", "--profile", "{profile}"]
-
-
-@DNS.command("records/command/apply", meta={"label": "Apply DNS changes"})
-def dns_apply_command(domain: str = "", provider: str = "namecheap", current_records: str = "", desired_records: str = "", plan: str = "", backup_uri: str = "", confirm: bool = False, mock_apply: bool = True, allow_current_drift: bool = False, profile: str = "") -> list[str]:
-    return ["urirun-domain-monitor", "dns-apply", "--domain", "{domain}", "--provider", "{provider}", "--current-records", "{current_records}", "--desired-records", "{desired_records}", "--plan", "{plan}", "--backup-uri", "{backup_uri}", "--confirm", "{confirm}", "--mock-apply", "{mock_apply}", "--allow-current-drift", "{allow_current_drift}", "--profile", "{profile}"]
 
 
 @BROWSER.command("page/command/screenshot", meta={"label": "Record screenshot artifact"})

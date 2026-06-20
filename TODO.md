@@ -1,6 +1,7 @@
 # TODO
 
 - [x] Publish `if-uri/urirun-connector-domain-monitor`.
-- [ ] Move domain monitor and Namecheap runtime code fully out of urirun core.
-- [ ] Add real Namecheap sandbox integration tests gated by environment vars.
+- [x] Move Namecheap DNS URI bindings to `urirun-connector-namecheap-dns`.
+- [ ] Move remaining domain monitor runtime code fully out of urirun core.
+- [ ] Add compatibility examples that compose domain checks with provider-specific DNS connectors.
 - [ ] Add browser screenshot integration with a real browser connector.

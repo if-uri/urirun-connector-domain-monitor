@@ -13,11 +13,9 @@ trap 'kill "$HTTP_PID" >/dev/null 2>&1 || true' EXIT
 sleep 1
 
 urirun-domain-monitor http-status --domain localhost --url http://127.0.0.1:9876/ > .docker-smoke/http.json
-urirun-domain-monitor dns-plan \
+urirun-domain-monitor dns-current \
   --domain example.com \
-  --provider namecheap \
-  --current-records '[{"Name":"@","Type":"A","Address":"203.0.113.10"}]' \
-  --desired-records '[{"Name":"@","Type":"A","Address":"203.0.113.11"}]' > .docker-smoke/plan.json
+  --current-records '[{"Name":"@","Type":"A","Address":"203.0.113.10"}]' > .docker-smoke/dns.json
 
 echo "==> build bindings and registry"
 python3 - <<'PY' > .docker-smoke/bindings.json
@@ -30,10 +28,10 @@ urirun validate .docker-smoke/bindings.json
 urirun compile .docker-smoke/bindings.json --out .docker-smoke/registry.json
 
 echo "==> execute connector URI through urirun"
-urirun run 'dns://host/records/command/plan' .docker-smoke/registry.json \
-  --payload '{"domain":"example.com","provider":"namecheap","current_records":"[{\"Name\":\"@\",\"Type\":\"A\",\"Address\":\"203.0.113.10\"}]","desired_records":"[{\"Name\":\"@\",\"Type\":\"A\",\"Address\":\"203.0.113.11\"}]"}' \
+urirun run 'monitor://host/dns/query/current' .docker-smoke/registry.json \
+  --payload '{"domain":"example.com","current_records":"[{\"Name\":\"@\",\"Type\":\"A\",\"Address\":\"203.0.113.10\"}]"}' \
   --execute \
-  --allow 'dns://host/*' > .docker-smoke/urirun-result.json
+  --allow 'monitor://host/*' > .docker-smoke/urirun-result.json
 
 echo "==> project registry to MCP tools and A2A card"
 python3 -m urirun.v2_mcp tools .docker-smoke/registry.json > .docker-smoke/mcp-tools.json
@@ -47,18 +45,18 @@ from pathlib import Path
 
 base = Path(".docker-smoke")
 http = json.loads((base / "http.json").read_text())
-plan = json.loads((base / "plan.json").read_text())
+dns = json.loads((base / "dns.json").read_text())
 run = json.loads((base / "urirun-result.json").read_text())
 run_payload = json.loads(run["result"]["stdout"])
 tools = json.loads((base / "mcp-tools.json").read_text())
 card = json.loads((base / "a2a-card.json").read_text())
 
 assert http["ok"] is True, http
-assert plan["diff"]["changed"] is True, plan
+assert dns["records"][0]["Address"] == "203.0.113.10", dns
 assert run["ok"] is True, run
-assert run_payload["diff"]["changed"] is True, run_payload
-assert any(tool["name"] == "dns_host_records_command_plan" for tool in tools["tools"]), tools
-assert any("dns://host/records/command/plan" in skill.get("examples", []) for skill in card["skills"]), card
+assert run_payload["records"][0]["Address"] == "203.0.113.10", run_payload
+assert any(tool["name"] == "monitor_host_dns_query_current" for tool in tools["tools"]), tools
+assert any("monitor://host/dns/query/current" in skill.get("examples", []) for skill in card["skills"]), card
 print(json.dumps({
     "ok": True,
     "mcpTools": len(tools["tools"]),

@@ -26,14 +26,6 @@ def _add_db(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--db", default="")
 
 
-def _add_dns_records(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--current-records", default="")
-    parser.add_argument("--desired-records", default="")
-    parser.add_argument("--ensure-records", default="")
-    parser.add_argument("--remove-records", default="")
-    parser.add_argument("--profile", default="")
-
-
 def _add_expected(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--expected-records", default="")
     parser.add_argument("--expected-a", default="")
@@ -64,31 +56,6 @@ def main(argv: list[str] | None = None) -> int:
 
     dns_expected = sub.add_parser("dns-expected", help="Render expected DNS records")
     _add_expected(dns_expected)
-
-    dns_plan = sub.add_parser("dns-plan", help="Plan DNS changes")
-    _add_domain(dns_plan)
-    dns_plan.add_argument("--provider", default="namecheap")
-    _add_dns_records(dns_plan)
-
-    dns_backup = sub.add_parser("dns-backup", help="Backup DNS records")
-    _add_domain(dns_backup)
-    dns_backup.add_argument("--provider", default="namecheap")
-    dns_backup.add_argument("--current-records", default="")
-    dns_backup.add_argument("--backup-dir", default="")
-    dns_backup.add_argument("--profile", default="")
-    _add_db(dns_backup)
-
-    dns_apply = sub.add_parser("dns-apply", help="Apply DNS changes")
-    _add_domain(dns_apply)
-    dns_apply.add_argument("--provider", default="namecheap")
-    dns_apply.add_argument("--current-records", default="")
-    dns_apply.add_argument("--desired-records", default="")
-    dns_apply.add_argument("--plan", default="")
-    dns_apply.add_argument("--backup-uri", default="")
-    dns_apply.add_argument("--confirm", type=_bool_text, default=False)
-    dns_apply.add_argument("--mock-apply", type=_bool_text, default=True)
-    dns_apply.add_argument("--allow-current-drift", type=_bool_text, default=False)
-    dns_apply.add_argument("--profile", default="")
 
     shot = sub.add_parser("screenshot", help="Record screenshot artifact metadata")
     _add_domain(shot)

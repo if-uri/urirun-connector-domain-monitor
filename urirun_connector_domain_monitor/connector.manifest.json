@@ -1,17 +1,14 @@
 {
   "id": "domain-monitor",
   "name": "Domain Monitor",
-  "version": "0.1.0",
-  "summary": "HTTP, DNS, screenshot, log and Namecheap DNS planning routes for urirun.",
+  "version": "0.2.0",
+  "summary": "HTTP, DNS read, screenshot, log and daily domain-check flow routes for urirun.",
   "repository": "https://github.com/if-uri/urirun-connector-domain-monitor",
-  "install": "pip install git+https://github.com/if-uri/urirun-connector-domain-monitor.git@v0.1.0",
+  "install": "pip install git+https://github.com/if-uri/urirun-connector-domain-monitor.git@v0.2.0",
   "routes": [
     "monitor://host/http/query/status",
-    "dns://host/records/query/current",
-    "dns://host/records/query/expected",
-    "dns://host/records/command/plan",
-    "dns://host/records/command/backup",
-    "dns://host/records/command/apply",
+    "monitor://host/dns/query/current",
+    "monitor://host/dns/query/expected",
     "browser://host/page/command/screenshot",
     "log://host/daily/command/write",
     "log://host/logs/query/recent",
@@ -28,12 +25,10 @@
       }
     },
     {
-      "uri": "dns://host/records/command/plan",
+      "uri": "monitor://host/dns/query/current",
       "payload": {
         "domain": "example.com",
-        "provider": "namecheap",
-        "current_records": "[{\"Name\":\"@\",\"Type\":\"A\",\"Address\":\"203.0.113.10\"}]",
-        "desired_records": "[{\"Name\":\"@\",\"Type\":\"A\",\"Address\":\"203.0.113.11\"}]"
+        "record_types": "A,AAAA"
       }
     },
     {
@@ -48,7 +43,7 @@
   "flowExample": {
     "task": {
       "id": "daily-domain-check",
-      "title": "Check domain and prepare DNS plan"
+      "title": "Check domain status and DNS records"
     },
     "steps": [
       {
@@ -60,11 +55,11 @@
         }
       },
       {
-        "id": "plan",
-        "uri": "dns://host/records/command/plan",
+        "id": "dns",
+        "uri": "monitor://host/dns/query/current",
         "payload": {
-          "provider": "namecheap",
-          "domain": "example.com"
+          "domain": "example.com",
+          "record_types": "A,AAAA"
         },
         "depends_on": ["status"]
       }

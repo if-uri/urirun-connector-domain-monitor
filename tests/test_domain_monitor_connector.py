@@ -15,9 +15,7 @@ from pathlib import Path
 from urirun import v2
 from urirun_connector_domain_monitor import (
     connector_manifest,
-    dns_apply,
-    dns_backup,
-    dns_plan,
+    dns_current,
     domain_check,
     http_status,
     urirun_bindings,
@@ -26,7 +24,6 @@ from urirun_connector_domain_monitor.cli import main
 
 
 CURRENT = [{"Name": "@", "Type": "A", "Address": "203.0.113.10", "TTL": 1800}]
-DESIRED = [{"Name": "@", "Type": "A", "Address": "203.0.113.11", "TTL": 1800}]
 
 
 class _Handler(BaseHTTPRequestHandler):
@@ -69,11 +66,12 @@ def test_manifest_and_bindings_shape() -> None:
     routes = v2.list_routes(_registry())
 
     assert manifest["id"] == "domain-monitor"
-    assert "dns://host/records/command/plan" in manifest["routes"]
+    assert "monitor://host/dns/query/current" in manifest["routes"]
     assert "flow://host/domain/command/check" in manifest["routes"]
     assert bindings["version"] == "urirun.bindings.v2"
     assert "monitor://host/http/query/status" in bindings["bindings"]
-    assert any(route["uri"] == "dns://host/records/command/apply" for route in routes)
+    assert any(route["uri"] == "monitor://host/dns/query/current" for route in routes)
+    assert all(not route["uri"].startswith("dns://") for route in routes)
 
 
 def test_http_status_direct() -> None:
@@ -83,29 +81,12 @@ def test_http_status_direct() -> None:
     assert result["http"]["status"] == 200
 
 
-def test_namecheap_plan_backup_apply_mock() -> None:
-    with tempfile.TemporaryDirectory() as tmp:
-        current = json.dumps(CURRENT)
-        desired = json.dumps(DESIRED)
+def test_dns_current_accepts_mock_records() -> None:
+    result = dns_current(domain="example.com", current_records=json.dumps(CURRENT))
 
-        plan = dns_plan(domain="example.com", current_records=current, desired_records=desired)
-        assert plan["ok"] is True
-        assert plan["diff"]["changed"] is True
-
-        backup = dns_backup(domain="example.com", current_records=current, db=str(Path(tmp) / "host.db"), backup_dir=str(Path(tmp) / "backups"))
-        assert backup["ok"] is True
-        assert Path(backup["backup"]["path"]).exists()
-
-        applied = dns_apply(
-            domain="example.com",
-            current_records=current,
-            plan=json.dumps(plan),
-            backup_uri=backup["backup"]["uri"],
-            confirm=True,
-            mock_apply=True,
-        )
-        assert applied["ok"] is True
-        assert applied["mock"] is True
+    assert result["ok"] is True
+    assert result["source"] == "payload"
+    assert result["records"] == CURRENT
 
 
 def test_domain_check_writes_host_db() -> None:
@@ -133,22 +114,20 @@ def test_cli_and_urirun_run_connector_uri(capsys) -> None:
         try:
             assert main(["bindings"]) == 0
             bindings = json.loads(capsys.readouterr().out)
-            assert "dns://host/records/command/plan" in bindings["bindings"]
+            assert "monitor://host/dns/query/current" in bindings["bindings"]
 
             result = v2.run(
-                "dns://host/records/command/plan",
+                "monitor://host/dns/query/current",
                 _registry(),
                 {
                     "domain": "example.com",
-                    "provider": "namecheap",
                     "current_records": json.dumps(CURRENT),
-                    "desired_records": json.dumps(DESIRED),
                 },
                 mode="execute",
-                policy={"execute": {"allow": ["dns://host/*"]}},
+                policy={"execute": {"allow": ["monitor://host/*"]}},
             )
             assert result["ok"] is True, result
             stdout = json.loads(result["result"]["stdout"])
-            assert stdout["diff"]["changed"] is True
+            assert stdout["records"] == CURRENT
         finally:
             os.environ["PATH"] = previous_path

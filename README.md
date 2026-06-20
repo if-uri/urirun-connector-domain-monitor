@@ -1,7 +1,7 @@
 # urirun-connector-domain-monitor
 
 `domain-monitor` is an external urirun connector for HTTP checks, DNS reads,
-Namecheap DNS planning, screenshot artifacts, logs and daily domain-check flows.
+screenshot artifacts, logs and daily domain-check flows.
 
 The package exposes URI bindings through decorators and executes them through a
 small CLI:
@@ -9,17 +9,17 @@ small CLI:
 ```python
 import urirun
 
-DNS = urirun.connector("domain-monitor", scheme="dns")
+MONITOR = urirun.connector("domain-monitor", scheme="monitor")
 
-@DNS.command("records/command/plan")
-def dns_plan_command(domain: str = "", provider: str = "namecheap"):
-    return ["urirun-domain-monitor", "dns-plan", "--domain", "{domain}", "--provider", "{provider}"]
+@MONITOR.command("http/query/status")
+def http_status_command(domain: str = "", url: str = ""):
+    return ["urirun-domain-monitor", "http-status", "--domain", "{domain}", "--url", "{url}"]
 ```
 
 ## Install
 
 ```bash
-pip install "git+https://github.com/if-uri/urirun-connector-domain-monitor.git@v0.1.0"
+pip install "git+https://github.com/if-uri/urirun-connector-domain-monitor.git@v0.2.0"
 ```
 
 ## Use
@@ -35,14 +35,18 @@ urirun run 'monitor://host/http/query/status' registry.json \
   --allow 'monitor://host/*'
 ```
 
-Namecheap routes can be tested safely with mock records:
+DNS reads can be tested safely with mock records:
 
 ```bash
-urirun run 'dns://host/records/command/plan' registry.json \
-  --payload '{"domain":"example.com","provider":"namecheap","current_records":"[{\"Name\":\"@\",\"Type\":\"A\",\"Address\":\"203.0.113.10\"}]","desired_records":"[{\"Name\":\"@\",\"Type\":\"A\",\"Address\":\"203.0.113.11\"}]"}' \
+urirun run 'monitor://host/dns/query/current' registry.json \
+  --payload '{"domain":"example.com","current_records":"[{\"Name\":\"@\",\"Type\":\"A\",\"Address\":\"203.0.113.10\"}]"}' \
   --execute \
-  --allow 'dns://host/*'
+  --allow 'monitor://host/*'
 ```
+
+Provider-specific DNS mutations are intentionally outside this connector.
+Use [`urirun-connector-namecheap-dns`](https://github.com/if-uri/urirun-connector-namecheap-dns)
+for `dns://host/records/command/plan`, backup and apply routes.
 
 ## Test
 
