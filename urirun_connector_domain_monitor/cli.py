@@ -4,14 +4,13 @@
 from __future__ import annotations
 
 import argparse
-import json
 import sys
+
+import urirun
 
 from .core import connector_manifest, run_action, urirun_bindings
 
 
-def emit(payload: dict) -> None:
-    print(json.dumps(payload, indent=2, ensure_ascii=False, sort_keys=True))
 
 
 def _bool_text(value: str) -> bool:
@@ -37,9 +36,7 @@ def _add_screenshot(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--screenshot-dir", default="")
 
 
-def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="urirun-domain-monitor")
-    sub = parser.add_subparsers(dest="command", required=True)
+def register(sub) -> None:
 
     http = sub.add_parser("http-status", help="Check HTTP status")
     _add_domain(http)
@@ -95,25 +92,28 @@ def main(argv: list[str] | None = None) -> int:
     _add_screenshot(daily)
     daily.add_argument("--execute", type=_bool_text, default=True)
 
-    sub.add_parser("manifest", help="Emit connect.ifuri.com connector manifest")
-    sub.add_parser("bindings", help="Emit urirun v2 bindings")
 
-    args = parser.parse_args(argv)
+def dispatch(args) -> int:
     data = vars(args)
     command = data.pop("command")
-    if command == "manifest":
-        emit(connector_manifest())
-        return 0
-    if command == "bindings":
-        emit(urirun_bindings())
-        return 0
     try:
         result = run_action(command, **data)
     except Exception as exc:  # noqa: BLE001 - connector CLI reports JSON errors.
-        emit({"ok": False, "connector": "domain-monitor", "action": command, "error": str(exc)})
+        urirun.connector_emit({"ok": False, "connector": "domain-monitor", "action": command, "error": str(exc)})
         return 2
-    emit(result)
+    urirun.connector_emit(result)
     return 0 if result.get("ok") else 2
+
+
+def main(argv: list[str] | None = None) -> int:
+    return urirun.connector_cli(
+        "urirun-domain-monitor",
+        manifest=connector_manifest,
+        bindings=urirun_bindings,
+        register=register,
+        dispatch=dispatch,
+        argv=argv,
+    )
 
 
 if __name__ == "__main__":

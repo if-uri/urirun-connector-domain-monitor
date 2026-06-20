@@ -12,7 +12,6 @@ import urllib.error
 import urllib.request
 import uuid
 from contextlib import contextmanager
-from importlib import resources
 from pathlib import Path
 from typing import Any
 
@@ -75,16 +74,8 @@ CREATE TABLE IF NOT EXISTS logs (
 """
 
 
-def _json_resource(name: str) -> dict[str, Any]:
-    text = resources.files(__package__).joinpath(name).read_text(encoding="utf-8")
-    data = json.loads(text)
-    if not isinstance(data, dict):
-        raise ValueError(f"{name} must contain a JSON object")
-    return data
-
-
 def connector_manifest() -> dict[str, Any]:
-    return _json_resource("connector.manifest.json")
+    return urirun.load_manifest(__package__)
 
 
 def _json_value(value: Any, default: Any):
