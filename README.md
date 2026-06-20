@@ -51,3 +51,14 @@ make test
 make smoke
 make docker-test
 ```
+
+## Related projects
+
+- Runtime: [tellmesh/urirun](https://github.com/tellmesh/urirun)
+- Docs: [docs.ifuri.com/connectors.html](https://docs.ifuri.com/connectors.html) · [authoring a connector](https://docs.ifuri.com/connector-authoring.html)
+- Hub page: [connect.ifuri.com/connectors/domain-monitor](https://connect.ifuri.com/connectors/domain-monitor)
+- Connector hub: [connect.ifuri.com](https://connect.ifuri.com)
+- Examples: [if-uri/examples](https://github.com/if-uri/examples)
+- Work summary: [work-summary-2026-06-20](https://github.com/if-uri/docs/blob/main/work-summary-2026-06-20.md)
+
+Repository notes: [TODO.md](TODO.md) · [CHANGELOG.md](CHANGELOG.md)
