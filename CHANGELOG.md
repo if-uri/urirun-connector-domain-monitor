@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Added
+- Add follow-up tasks for IFURI-016 Docker matrix coverage and richer connector
+  contract documentation.
+
+### Changed
+- Keep active runtime dependency and docs links on `github.com/if-uri/urirun`.
+
 ## [0.2.1] - 2026-06-20
 
 ### Changed

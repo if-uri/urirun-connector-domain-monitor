@@ -4,7 +4,10 @@
   "version": "0.2.1",
   "summary": "HTTP, DNS read, screenshot, log and daily domain-check flow routes for urirun.",
   "repository": "https://github.com/if-uri/urirun-connector-domain-monitor",
-  "install": "pip install git+https://github.com/if-uri/urirun-connector-domain-monitor.git@v0.2.1",
+  "install": {
+    "mode": "urirun-extra",
+    "pipSpec": "urirun-connector-domain-monitor @ git+https://github.com/if-uri/urirun-connector-domain-monitor.git@v0.2.1"
+  },
   "routes": [
     "monitor://host/http/query/status",
     "monitor://host/dns/query/current",
@@ -15,7 +18,9 @@
     "flow://host/domain/command/check",
     "flow://host/daily/command/run"
   ],
-  "adapterKinds": ["argv-template"],
+  "adapterKinds": [
+    "argv-template"
+  ],
   "examples": [
     {
       "uri": "monitor://host/http/query/status",
@@ -61,7 +66,9 @@
           "domain": "example.com",
           "record_types": "A,AAAA"
         },
-        "depends_on": ["status"]
+        "depends_on": [
+          "status"
+        ]
       }
     ]
   }

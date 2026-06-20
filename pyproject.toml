@@ -24,6 +24,9 @@ Repository = "https://github.com/if-uri/urirun-connector-domain-monitor"
 [project.scripts]
 urirun-domain-monitor = "urirun_connector_domain_monitor.cli:main"
 
+[project.entry-points."urirun.bindings"]
+domain-monitor = "urirun_connector_domain_monitor:urirun_bindings"
+
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["urirun_connector_domain_monitor*"]
