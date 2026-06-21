@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Changed
+- Reuse the urirun host backend (`urirun.host.domain_monitor / host_db`) instead of a bundled copy of
+  the logic; the connector now owns only the URI routes and JSON envelope.
+  urirun is the single source of truth. Routes/manifest/CLI unchanged.
+
 ### Added
 - Add follow-up tasks for IFURI-016 Docker matrix coverage and richer connector
   contract documentation.
