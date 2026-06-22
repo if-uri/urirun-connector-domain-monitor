@@ -1,13 +1,19 @@
 # Author: Tom Sapletta · https://tom.sapletta.com
 # Part of the ifURI solution.
 #
-# domain-monitor connector — v2 authoring. Each route is declared ONCE as a
-# ``@handler`` (a local-function binding): the typed signature is the input schema,
-# the body is the work. No argv ``*_command`` twin, no ``run_action`` dispatch table,
-# no ``_exec.py`` argv shim, and no hand-written ``main``/``manifest``/``bindings`` —
-# the runtime hydrates the function from the serialized ``python: {module, export}``
-# descriptor (pip already makes the module importable), so a route runs in-process
-# from a file registry, ``urirun run``, or a served node alike.
+# domain-monitor connector — v2 authoring. Each route is declared ONCE as a typed
+# ``@handler`` with ``isolated=True``: the signature is the input schema, the body is
+# the work. No argv ``*_command`` twin, no ``run_action`` dispatch table, no
+# ``_exec.py`` argv shim, and no hand-written ``main``/``manifest``/``bindings``.
+# ``isolated=True`` runs each route out-of-process through the shared
+# ``python -m urirun.exec`` runner, so the bindings stay **registry-portable**: a
+# route executes from a compiled/served registry (``urirun run`` / ``urirun node
+# serve``) with only the package importable — no console-script install and no
+# per-connector shim.
+#
+# The four connector objects (MONITOR / BROWSER / LOG / FLOW) all share the single
+# ``domain-monitor`` connector id, so one ``.bindings()`` / ``.manifest()`` /
+# ``.cli()`` covers every route across every scheme.
 
 from __future__ import annotations
 
@@ -53,14 +59,14 @@ def _split_csv(value) -> list[str]:
     return [item.strip() for item in str(value).split(",") if item.strip()]
 
 
-@MONITOR.handler("http/query/status", meta={"label": "HTTP status check"})
+@MONITOR.handler("http/query/status", isolated=True, meta={"label": "HTTP status check"})
 def http_status(domain: str = "", url: str = "", timeout: float = 10.0, expected_status: int = 0) -> dict[str, Any]:
     target = domain or "localhost"
     result = probe_http_status(url or default_url(target), timeout=timeout, expected_status=expected_status or None)
     return {"ok": bool(result.get("ok")), "connector": CONNECTOR_ID, "type": "domain-monitor", "domain": target, "http": result}
 
 
-@MONITOR.handler("dns/query/current", meta={"label": "Current DNS records"})
+@MONITOR.handler("dns/query/current", isolated=True, meta={"label": "Current DNS records"})
 def dns_current(domain: str = "", provider: str = "", record_types: list | None = None,
                 current_records: list | None = None, profile: str = "") -> dict[str, Any]:
     target = domain or "localhost"
@@ -74,14 +80,14 @@ def dns_current(domain: str = "", provider: str = "", record_types: list | None 
     return {"ok": bool(result.get("ok")), "connector": CONNECTOR_ID, "type": "domain-monitor", **result}
 
 
-@MONITOR.handler("dns/query/expected", meta={"label": "Expected DNS records"})
+@MONITOR.handler("dns/query/expected", isolated=True, meta={"label": "Expected DNS records"})
 def dns_expected(expected_records: dict | None = None, expected_a: str = "", expected_aaaa: str = "") -> dict[str, Any]:
     payload = _expected_payload(expected_records or {}, expected_a, expected_aaaa)
     return {"ok": True, "connector": CONNECTOR_ID, "type": "domain-monitor",
             "expectedRecords": expected_records_from_payload(payload)}
 
 
-@BROWSER.handler("page/command/screenshot", meta={"label": "Record screenshot artifact"})
+@BROWSER.handler("page/command/screenshot", isolated=True, meta={"label": "Record screenshot artifact"})
 def screenshot(domain: str = "", url: str = "", db: str = "", screenshot_dir: str = "",
                reason: str = "manual", meta: dict | None = None) -> dict[str, Any]:
     target = domain or "localhost"
@@ -90,7 +96,7 @@ def screenshot(domain: str = "", url: str = "", db: str = "", screenshot_dir: st
     return {"ok": True, "connector": CONNECTOR_ID, "type": "domain-monitor", "artifact": artifact}
 
 
-@LOG.handler("daily/command/write", meta={"label": "Write daily log"})
+@LOG.handler("daily/command/write", isolated=True, meta={"label": "Write daily log"})
 def log_write(stream: str = "daily", event: str = "", detail: dict | None = None, db: str = "") -> dict[str, Any]:
     if not event:
         return urirun.fail("event is required", connector=CONNECTOR_ID)
@@ -98,13 +104,13 @@ def log_write(stream: str = "daily", event: str = "", detail: dict | None = None
             "log": add_log(db or None, stream, event, detail or {})}
 
 
-@LOG.handler("logs/query/recent", meta={"label": "Recent logs"})
+@LOG.handler("logs/query/recent", isolated=True, meta={"label": "Recent logs"})
 def logs_recent(stream: str = "daily", limit: int = 20, db: str = "") -> dict[str, Any]:
     return {"ok": True, "connector": CONNECTOR_ID, "type": "domain-monitor",
             "logs": recent_logs(db or None, stream=stream, limit=limit)}
 
 
-@FLOW.handler("domain/command/check", meta={"label": "Run domain check flow"})
+@FLOW.handler("domain/command/check", isolated=True, meta={"label": "Run domain check flow"})
 def domain_check(domain: str = "", url: str = "", expected_records: dict | None = None, expected_a: str = "",
                  expected_aaaa: str = "", db: str = "", project: str = "", timeout: float = 10.0,
                  screenshot_when: str = "failure", screenshot_dir: str = "",
@@ -116,7 +122,7 @@ def domain_check(domain: str = "", url: str = "", expected_records: dict | None 
     return {"connector": CONNECTOR_ID, "type": "domain-monitor", "flow": "domain-check", **result}
 
 
-@FLOW.handler("daily/command/run", meta={"label": "Run daily domain checks"})
+@FLOW.handler("daily/command/run", isolated=True, meta={"label": "Run daily domain checks"})
 def daily_run(db: str = "", project: str = "", dataset: str = "domains", limit: int = 50,
               screenshot_when: str = "failure", screenshot_dir: str = "", execute: bool = True) -> dict[str, Any]:
     result = run_daily(db=db or None, project=project or None, execute=execute, dataset=dataset, limit=limit,
@@ -125,7 +131,12 @@ def daily_run(db: str = "", project: str = "", dataset: str = "domains", limit: 
 
 
 # authoring surface — all derived from the declared @handlers, zero boilerplate.
-urirun_bindings = MONITOR.bindings
+# The four connector objects share the ``domain-monitor`` id, so one ``.bindings()``
+# returns every route across every scheme.
+
+def urirun_bindings() -> dict[str, Any]:
+    """Serializable v2 bindings for this connector (entry point: urirun.bindings)."""
+    return MONITOR.bindings()
 
 
 def connector_manifest() -> dict[str, Any]:
@@ -135,5 +146,11 @@ def connector_manifest() -> dict[str, Any]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """CLI entry point: subcommands + dispatch + manifest, all derived from the handlers."""
+    """Console-script entry point: subcommands + dispatch derived from the handlers."""
     return MONITOR.cli(argv, manifest_prose=urirun.load_manifest(__package__))
+
+
+if __name__ == "__main__":
+    import sys
+
+    raise SystemExit(main())

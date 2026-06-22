@@ -3,17 +3,23 @@
 `domain-monitor` is an external urirun connector for HTTP checks, DNS reads,
 screenshot artifacts, logs and daily domain-check flows.
 
-The package exposes URI bindings through decorators and executes them through a
-small CLI:
+Each route is declared once as a typed `@handler(isolated=True)`: the function
+signature is the input schema and the body is the implementation — no argv
+`*_command` twin, no `_exec.py` shim, no `run_action` dispatcher. `isolated=True`
+runs each route out-of-process through the shared `python -m urirun.exec` runner,
+so the bindings stay **registry-portable** (they execute from a compiled/served
+registry with only the package importable). The four connector objects
+(`MONITOR`/`BROWSER`/`LOG`/`FLOW`) share the one `domain-monitor` connector id, so
+one `urirun_bindings()` returns every route:
 
 ```python
 import urirun
 
 MONITOR = urirun.connector("domain-monitor", scheme="monitor")
 
-@MONITOR.command("http/query/status")
-def http_status_command(domain: str = "", url: str = ""):
-    return ["urirun-domain-monitor", "http-status", "--domain", "{domain}", "--url", "{url}"]
+@MONITOR.handler("http/query/status", isolated=True, meta={"label": "HTTP status check"})
+def http_status(domain: str = "", url: str = "", timeout: float = 10.0, expected_status: int = 0):
+    ...  # the body is the implementation
 ```
 
 ## Install

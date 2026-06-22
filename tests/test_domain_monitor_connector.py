@@ -1,56 +1,167 @@
 # Author: Tom Sapletta · https://tom.sapletta.com
 # Part of the ifURI solution.
 
-"""domain-monitor connector: @handler routes are route-equivalent to the host
-backend and run in-process — including from a compiled FILE registry (no _exec.py)."""
+"""domain-monitor connector: every route is a typed ``@handler(isolated=True)`` —
+registry-portable (adapter ``local-function-subprocess``, ``python:{module,export}``,
+no argv) and runnable from a COMPILED registry via the shared ``urirun.exec`` runner.
+No real network/DNS/HTTP is touched: offline routes (dns/query/expected) compute
+from the payload and log routes run against a tmp SQLite db."""
 from __future__ import annotations
 
 import json
 
 import urirun
-from urirun.runtime import _runtime
-from urirun_connector_domain_monitor import core
+from urirun import v2
+from urirun_connector_domain_monitor import (
+    connector_manifest,
+    dns_current,
+    dns_expected,
+    log_write,
+    logs_recent,
+    main,
+    urirun_bindings,
+)
+
+MODULE = "urirun_connector_domain_monitor.core"
+
+ROUTE_HTTP = "monitor://host/http/query/status"
+ROUTE_DNS_CURRENT = "monitor://host/dns/query/current"
+ROUTE_DNS_EXPECTED = "monitor://host/dns/query/expected"
+ROUTE_SCREENSHOT = "browser://host/page/command/screenshot"
+ROUTE_LOG_WRITE = "log://host/daily/command/write"
+ROUTE_LOGS_RECENT = "log://host/logs/query/recent"
+ROUTE_DOMAIN_CHECK = "flow://host/domain/command/check"
+ROUTE_DAILY_RUN = "flow://host/daily/command/run"
+
+ALL_ROUTES = {
+    ROUTE_HTTP, ROUTE_DNS_CURRENT, ROUTE_DNS_EXPECTED, ROUTE_SCREENSHOT,
+    ROUTE_LOG_WRITE, ROUTE_LOGS_RECENT, ROUTE_DOMAIN_CHECK, ROUTE_DAILY_RUN,
+}
+
+# route -> exported real-function name (the handler hydrated by python:{module,export})
+ROUTE_EXPORTS = {
+    ROUTE_HTTP: "http_status",
+    ROUTE_DNS_CURRENT: "dns_current",
+    ROUTE_DNS_EXPECTED: "dns_expected",
+    ROUTE_SCREENSHOT: "screenshot",
+    ROUTE_LOG_WRITE: "log_write",
+    ROUTE_LOGS_RECENT: "logs_recent",
+    ROUTE_DOMAIN_CHECK: "domain_check",
+    ROUTE_DAILY_RUN: "daily_run",
+}
 
 DM_RECORDS = [{"Name": "@", "Type": "A", "Address": "203.0.113.10"}]
 
 
-def test_eight_local_function_routes():
-    b = core.urirun_bindings()["bindings"]
-    assert len(b) == 8
-    assert {e["adapter"] for e in b.values()} == {"local-function"}
-    for uri in ("monitor://host/http/query/status", "monitor://host/dns/query/current",
-                "flow://host/domain/command/check", "log://host/logs/query/recent"):
-        assert uri in b
+# --- real impl functions called directly (offline / payload-only) ----------
+
+def test_dns_expected_computes_from_payload():
+    out = dns_expected(expected_a="203.0.113.10", expected_aaaa="2001:db8::1")
+    assert out["ok"] is True
+    assert out["connector"] == "domain-monitor"
+    assert out["expectedRecords"]["A"] == ["203.0.113.10"]
+    assert out["expectedRecords"]["AAAA"] == ["2001:db8::1"]
 
 
-def test_handler_runs_in_process():
-    out = core.http_status(domain="example.com", url="https://example.com")
-    assert "ok" in out and out["connector"] == "domain-monitor" and "http" in out
+def test_dns_current_uses_payload_records_no_network():
+    out = dns_current(domain="example.com", current_records=DM_RECORDS)
+    assert out["ok"] is True
+    assert out["source"] == "payload"
+    assert out["records"][0]["Address"] == "203.0.113.10"
 
 
-def test_runs_from_compiled_file_registry(tmp_path):
-    # the deciding path: compile to a registry doc, run a local-function route through
-    # urirun.run — the handler is hydrated from python:{module,export}, no argv shim.
-    doc = core.urirun_bindings()
-    reg_path = tmp_path / "reg.json"
-    reg_path.write_text(json.dumps(urirun.compile_registry(doc)))
-    registry = _runtime.load_registry_arg(str(reg_path))
-    policy = _runtime.build_policy(None, ["monitor://*"], None)
-    result = urirun.run("monitor://host/dns/query/current", registry,
-                        {"domain": "example.com", "current_records": DM_RECORDS},
-                        mode="execute", policy=policy)
-    assert result["ok"] is True
-    value = result["result"]["value"]
-    # current_records arrived as a real list (typed by the schema), used directly —
-    # no _bool/_json_value string-coercion, because the runtime types from the signature.
-    assert value["records"][0]["Address"] == "203.0.113.10"
-    assert value["source"] == "payload"
+def test_dns_current_rejects_provider():
+    out = dns_current(domain="example.com", provider="namecheap")
+    assert out["ok"] is False
+    assert "provider" in out["error"]
 
 
-def test_manifest_machine_fields_derive_from_handlers():
-    # Connector.manifest fills routes/uriSchemes/adapterKinds from the @handlers,
-    # so the prose manifest can never drift from the code.
-    manifest = core.connector_manifest()
-    assert manifest["id"] == "domain-monitor"
-    assert len(manifest.get("routes", [])) == 8
-    assert set(manifest.get("uriSchemes", [])) >= {"monitor", "browser", "log", "flow"}
+def test_log_write_and_recent_roundtrip_tmp_db(tmp_path):
+    db = str(tmp_path / "dm.sqlite")
+    written = log_write(stream="daily", event="hello", detail={"k": "v"}, db=db)
+    assert written["ok"] is True
+    recent = logs_recent(stream="daily", limit=5, db=db)
+    assert recent["ok"] is True
+    events = [row.get("event") for row in recent["logs"]]
+    assert "hello" in events
+
+
+def test_log_write_requires_event(tmp_path):
+    db = str(tmp_path / "dm.sqlite")
+    out = log_write(stream="daily", event="", db=db)
+    assert out["ok"] is False
+
+
+# --- v2 authoring contract: isolated handlers (registry-portable) ----------
+
+def test_bindings_are_isolated_handlers():
+    b = urirun_bindings()["bindings"]
+    assert set(b) == ALL_ROUTES
+    for route, export in ROUTE_EXPORTS.items():
+        # registry-portable handler: runs out-of-process via urirun.exec, no argv.
+        assert b[route]["adapter"] == "local-function-subprocess"
+        assert b[route]["python"]["module"] == MODULE
+        assert b[route]["python"]["export"] == export
+        assert "argv" not in b[route]
+    # input schemas equal the handler signatures (route contracts unchanged).
+    expected_props = b[ROUTE_DNS_EXPECTED]["inputSchema"]["properties"]
+    assert set(expected_props) == {"expected_records", "expected_a", "expected_aaaa"}
+    assert b[ROUTE_LOGS_RECENT]["inputSchema"]["properties"]["limit"]["default"] == 20
+    json.dumps(urirun_bindings())  # serializable: no live ref leaks
+
+
+def test_compiles_and_routes_present():
+    registry = urirun.compile_registry(urirun_bindings())
+    uris = {r["uri"] for r in urirun.list_routes(registry)}
+    assert ALL_ROUTES <= uris
+
+
+def test_runtime_executes_offline_route_from_compiled_registry():
+    # the deciding path: a serialized -> compiled registry still runs the route.
+    # dns/query/expected is fully offline (it computes from the payload).
+    registry = urirun.compile_registry(json.loads(json.dumps(urirun_bindings())))
+    policy = urirun.policy(allow=["monitor://*"])
+
+    env = v2.run(ROUTE_DNS_EXPECTED, registry,
+                 payload={"expected_a": "203.0.113.10", "expected_aaaa": "2001:db8::1"},
+                 mode="execute", policy=policy)
+    assert env["ok"] is True
+    data = urirun.result_data(env)
+    assert data["ok"] is True
+    assert data["connector"] == "domain-monitor"
+    assert data["expectedRecords"]["A"] == ["203.0.113.10"]
+
+
+def test_runtime_executes_log_route_on_tmp_db(tmp_path):
+    # a log route runs against a tmp SQLite db — no network either.
+    db = str(tmp_path / "dm.sqlite")
+    log_write(stream="daily", event="from-test", db=db)
+
+    registry = urirun.compile_registry(json.loads(json.dumps(urirun_bindings())))
+    policy = urirun.policy(allow=["log://*"])
+    env = v2.run(ROUTE_LOGS_RECENT, registry,
+                 payload={"stream": "daily", "limit": 5, "db": db},
+                 mode="execute", policy=policy)
+    assert env["ok"] is True
+    data = urirun.result_data(env)
+    assert data["ok"] is True
+    assert "from-test" in [row.get("event") for row in data["logs"]]
+
+
+def test_manifest_prose_plus_derived_routes():
+    m = connector_manifest()
+    assert m["id"] == "domain-monitor"
+    assert set(m["routes"]) == ALL_ROUTES
+    assert set(m["uriSchemes"]) >= {"monitor", "browser", "log", "flow"}
+    assert m["summary"]  # prose preserved
+    assert m["install"]["mode"] == "urirun-extra"
+    json.dumps(m)
+
+
+# --- CLI -------------------------------------------------------------------
+
+def test_cli_bindings_and_manifest(capsys):
+    assert main(["bindings"]) == 0
+    assert ALL_ROUTES <= set(json.loads(capsys.readouterr().out)["bindings"])
+    assert main(["manifest"]) == 0
+    assert json.loads(capsys.readouterr().out)["id"] == "domain-monitor"
