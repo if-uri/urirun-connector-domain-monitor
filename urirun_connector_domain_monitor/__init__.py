@@ -2,23 +2,31 @@
 # Part of the ifURI solution.
 
 from .core import (
+    CONNECTOR_ID,
     connector_manifest,
+    daily_run,
     dns_current,
     dns_expected,
     domain_check,
     http_status,
-    recent_checks,
-    run_action,
+    log_write,
+    logs_recent,
+    main,
+    screenshot,
     urirun_bindings,
 )
 
 __all__ = [
+    "CONNECTOR_ID",
     "connector_manifest",
+    "daily_run",
     "dns_current",
     "dns_expected",
     "domain_check",
     "http_status",
-    "recent_checks",
-    "run_action",
+    "log_write",
+    "logs_recent",
+    "main",
+    "screenshot",
     "urirun_bindings",
 ]

@@ -4,79 +4,9 @@
   "status": "available",
   "version": "0.2.1",
   "summary": "HTTP, DNS read, screenshot, log and daily domain-check flow routes for urirun.",
-  "uriSchemes": [
-    "monitor",
-    "browser",
-    "flow",
-    "log"
-  ],
   "repository": "https://github.com/if-uri/urirun-connector-domain-monitor",
   "install": {
     "mode": "urirun-extra",
     "pipSpec": "urirun-connector-domain-monitor @ git+https://github.com/if-uri/urirun-connector-domain-monitor.git@v0.2.1"
-  },
-  "routes": [
-    "monitor://host/http/query/status",
-    "monitor://host/dns/query/current",
-    "monitor://host/dns/query/expected",
-    "browser://host/page/command/screenshot",
-    "log://host/daily/command/write",
-    "log://host/logs/query/recent",
-    "flow://host/domain/command/check",
-    "flow://host/daily/command/run"
-  ],
-  "adapterKinds": [
-    "argv-template"
-  ],
-  "examples": [
-    {
-      "uri": "monitor://host/http/query/status",
-      "payload": {
-        "domain": "example.com",
-        "url": "https://example.com/"
-      }
-    },
-    {
-      "uri": "monitor://host/dns/query/current",
-      "payload": {
-        "domain": "example.com",
-        "record_types": "A,AAAA"
-      }
-    },
-    {
-      "uri": "flow://host/domain/command/check",
-      "payload": {
-        "domain": "example.com",
-        "url": "https://example.com/",
-        "expected_a": "203.0.113.10"
-      }
-    }
-  ],
-  "flowExample": {
-    "task": {
-      "id": "daily-domain-check",
-      "title": "Check domain status and DNS records"
-    },
-    "steps": [
-      {
-        "id": "status",
-        "uri": "monitor://host/http/query/status",
-        "payload": {
-          "domain": "example.com",
-          "url": "https://example.com/"
-        }
-      },
-      {
-        "id": "dns",
-        "uri": "monitor://host/dns/query/current",
-        "payload": {
-          "domain": "example.com",
-          "record_types": "A,AAAA"
-        },
-        "depends_on": [
-          "status"
-        ]
-      }
-    ]
   }
 }

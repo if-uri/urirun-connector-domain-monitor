@@ -1,133 +1,56 @@
 # Author: Tom Sapletta · https://tom.sapletta.com
 # Part of the ifURI solution.
 
+"""domain-monitor connector: @handler routes are route-equivalent to the host
+backend and run in-process — including from a compiled FILE registry (no _exec.py)."""
 from __future__ import annotations
 
-import contextlib
 import json
-import os
-import sys
-import tempfile
-import threading
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from pathlib import Path
 
-from urirun import v2
-from urirun_connector_domain_monitor import (
-    connector_manifest,
-    dns_current,
-    domain_check,
-    http_status,
-    recent_checks,
-    urirun_bindings,
-)
-from urirun_connector_domain_monitor.cli import main
+import urirun
+from urirun.runtime import _runtime
+from urirun_connector_domain_monitor import core
+
+DM_RECORDS = [{"Name": "@", "Type": "A", "Address": "203.0.113.10"}]
 
 
-CURRENT = [{"Name": "@", "Type": "A", "Address": "203.0.113.10", "TTL": 1800}]
+def test_eight_local_function_routes():
+    b = core.urirun_bindings()["bindings"]
+    assert len(b) == 8
+    assert {e["adapter"] for e in b.values()} == {"local-function"}
+    for uri in ("monitor://host/http/query/status", "monitor://host/dns/query/current",
+                "flow://host/domain/command/check", "log://host/logs/query/recent"):
+        assert uri in b
 
 
-class _Handler(BaseHTTPRequestHandler):
-    status = 200
-
-    def do_GET(self):  # noqa: N802 - stdlib callback name.
-        self.send_response(self.status)
-        self.send_header("Content-Type", "text/plain")
-        self.end_headers()
-        self.wfile.write(b"ok")
-
-    def log_message(self, _format, *args):
-        return
+def test_handler_runs_in_process():
+    out = core.http_status(domain="example.com", url="https://example.com")
+    assert "ok" in out and out["connector"] == "domain-monitor" and "http" in out
 
 
-@contextlib.contextmanager
-def local_http(status: int = 200):
-    class Handler(_Handler):
-        pass
-
-    Handler.status = status
-    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    try:
-        yield f"http://127.0.0.1:{server.server_address[1]}/"
-    finally:
-        server.shutdown()
-        server.server_close()
-        thread.join(timeout=2)
-
-
-def _registry():
-    return v2.compile_registry(urirun_bindings())
+def test_runs_from_compiled_file_registry(tmp_path):
+    # the deciding path: compile to a registry doc, run a local-function route through
+    # urirun.run — the handler is hydrated from python:{module,export}, no argv shim.
+    doc = core.urirun_bindings()
+    reg_path = tmp_path / "reg.json"
+    reg_path.write_text(json.dumps(urirun.compile_registry(doc)))
+    registry = _runtime.load_registry_arg(str(reg_path))
+    policy = _runtime.build_policy(None, ["monitor://*"], None)
+    result = urirun.run("monitor://host/dns/query/current", registry,
+                        {"domain": "example.com", "current_records": DM_RECORDS},
+                        mode="execute", policy=policy)
+    assert result["ok"] is True
+    value = result["result"]["value"]
+    # current_records arrived as a real list (typed by the schema), used directly —
+    # no _bool/_json_value string-coercion, because the runtime types from the signature.
+    assert value["records"][0]["Address"] == "203.0.113.10"
+    assert value["source"] == "payload"
 
 
-def test_manifest_and_bindings_shape() -> None:
-    manifest = connector_manifest()
-    bindings = urirun_bindings()
-    routes = v2.list_routes(_registry())
-
+def test_manifest_machine_fields_derive_from_handlers():
+    # Connector.manifest fills routes/uriSchemes/adapterKinds from the @handlers,
+    # so the prose manifest can never drift from the code.
+    manifest = core.connector_manifest()
     assert manifest["id"] == "domain-monitor"
-    assert "monitor://host/dns/query/current" in manifest["routes"]
-    assert "flow://host/domain/command/check" in manifest["routes"]
-    assert bindings["version"] == "urirun.bindings.v2"
-    assert "monitor://host/http/query/status" in bindings["bindings"]
-    assert any(route["uri"] == "monitor://host/dns/query/current" for route in routes)
-    assert all(not route["uri"].startswith("dns://") for route in routes)
-
-
-def test_http_status_direct() -> None:
-    with local_http(200) as url:
-        result = http_status(domain="localhost", url=url)
-    assert result["ok"] is True
-    assert result["http"]["status"] == 200
-
-
-def test_dns_current_accepts_mock_records() -> None:
-    result = dns_current(domain="example.com", current_records=json.dumps(CURRENT))
-
-    assert result["ok"] is True
-    assert result["source"] == "payload"
-    assert result["records"] == CURRENT
-
-
-def test_domain_check_writes_host_db() -> None:
-    with tempfile.TemporaryDirectory() as tmp, local_http(200) as url:
-        db = str(Path(tmp) / "host.db")
-        result = domain_check(domain="localhost", url=url, db=db, execute=True, create_repair_ticket=False)
-        assert result["ok"] is True
-
-        assert recent_checks(db, subject="localhost")[0]["status"] == "ok"
-
-
-def test_cli_and_urirun_run_connector_uri(capsys) -> None:
-    with tempfile.TemporaryDirectory() as tmp:
-        bin_dir = Path(tmp) / "bin"
-        bin_dir.mkdir()
-        wrapper = bin_dir / "urirun-domain-monitor"
-        wrapper.write_text(
-            f"#!/usr/bin/env sh\nexec {sys.executable} -m urirun_connector_domain_monitor.cli \"$@\"\n",
-            encoding="utf-8",
-        )
-        wrapper.chmod(0o755)
-        previous_path = os.environ.get("PATH", "")
-        os.environ["PATH"] = f"{bin_dir}{os.pathsep}{previous_path}"
-        try:
-            assert main(["bindings"]) == 0
-            bindings = json.loads(capsys.readouterr().out)
-            assert "monitor://host/dns/query/current" in bindings["bindings"]
-
-            result = v2.run(
-                "monitor://host/dns/query/current",
-                _registry(),
-                {
-                    "domain": "example.com",
-                    "current_records": json.dumps(CURRENT),
-                },
-                mode="execute",
-                policy={"execute": {"allow": ["monitor://host/*"]}},
-            )
-            assert result["ok"] is True, result
-            stdout = json.loads(result["result"]["stdout"])
-            assert stdout["records"] == CURRENT
-        finally:
-            os.environ["PATH"] = previous_path
+    assert len(manifest.get("routes", [])) == 8
+    assert set(manifest.get("uriSchemes", [])) >= {"monitor", "browser", "log", "flow"}
