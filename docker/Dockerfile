@@ -9,4 +9,8 @@ RUN apt-get update \
   && python -m pip install --upgrade pip \
   && python -m pip install .[test]
 
+# Defense-in-depth: drop root (connector/node ports are >1024, non-root is fine).
+RUN useradd -m -u 10001 app && chown -R app:app .
+USER app
+
 CMD ["bash", "docker/run-smoke.sh"]
