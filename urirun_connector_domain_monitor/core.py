@@ -20,13 +20,16 @@ from __future__ import annotations
 from typing import Any
 
 import urirun
-from urirun.host import domain_monitor as _dm, host_db as _host_db
+from urirun.host import domain_monitor as _dm
 
 CONNECTOR_ID = "domain-monitor"
 MONITOR = urirun.connector(CONNECTOR_ID, scheme="monitor")
 BROWSER = urirun.connector(CONNECTOR_ID, scheme="browser")
-LOG = urirun.connector(CONNECTOR_ID, scheme="log")
 FLOW = urirun.connector(CONNECTOR_ID, scheme="flow")
+# NB: no `log://` routes here — the `log://host/...` store is owned by the
+# sqlite-context connector. domain-monitor's flows still log internally via the host
+# backend; exposing duplicate `log://` routes only shadowed sqlite-context's in a
+# merged registry (an exact-URI collision flagged by `urirun connectors doctor`).
 
 # Reuse the urirun host backend (single source of truth).
 default_url = _dm.default_url
@@ -36,8 +39,6 @@ expected_records_from_payload = _dm.expected_records
 capture_screenshot_artifact = _dm.capture_screenshot_artifact
 check_domain = _dm.check_domain
 run_daily = _dm.run_daily
-add_log = _host_db.add_log
-recent_logs = _host_db.recent_logs
 
 
 def _expected_payload(expected_records, expected_a: str, expected_aaaa: str) -> dict[str, Any]:
@@ -94,20 +95,6 @@ def screenshot(domain: str = "", url: str = "", db: str = "", screenshot_dir: st
     artifact = capture_screenshot_artifact(db=db or None, domain=target, url=url or default_url(target),
                                            out_dir=screenshot_dir or None, reason=reason, meta=meta or {})
     return {"ok": True, "connector": CONNECTOR_ID, "type": "domain-monitor", "artifact": artifact}
-
-
-@LOG.handler("daily/command/write", isolated=True, meta={"label": "Write daily log"})
-def log_write(stream: str = "daily", event: str = "", detail: dict | None = None, db: str = "") -> dict[str, Any]:
-    if not event:
-        return urirun.fail("event is required", connector=CONNECTOR_ID)
-    return {"ok": True, "connector": CONNECTOR_ID, "type": "domain-monitor",
-            "log": add_log(db or None, stream, event, detail or {})}
-
-
-@LOG.handler("logs/query/recent", isolated=True, meta={"label": "Recent logs"})
-def logs_recent(stream: str = "daily", limit: int = 20, db: str = "") -> dict[str, Any]:
-    return {"ok": True, "connector": CONNECTOR_ID, "type": "domain-monitor",
-            "logs": recent_logs(db or None, stream=stream, limit=limit)}
 
 
 @FLOW.handler("domain/command/check", isolated=True, meta={"label": "Run domain check flow"})

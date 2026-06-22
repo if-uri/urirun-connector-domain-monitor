@@ -16,8 +16,6 @@ from urirun_connector_domain_monitor import (
     connector_manifest,
     dns_current,
     dns_expected,
-    log_write,
-    logs_recent,
     main,
     urirun_bindings,
 )
@@ -28,14 +26,14 @@ ROUTE_HTTP = "monitor://host/http/query/status"
 ROUTE_DNS_CURRENT = "monitor://host/dns/query/current"
 ROUTE_DNS_EXPECTED = "monitor://host/dns/query/expected"
 ROUTE_SCREENSHOT = "browser://host/page/command/screenshot"
-ROUTE_LOG_WRITE = "log://host/daily/command/write"
-ROUTE_LOGS_RECENT = "log://host/logs/query/recent"
 ROUTE_DOMAIN_CHECK = "flow://host/domain/command/check"
 ROUTE_DAILY_RUN = "flow://host/daily/command/run"
 
+# NB: no log:// routes — the log store is owned by the sqlite-context connector
+# (dropping the duplicate avoids an exact-URI collision in a merged registry).
 ALL_ROUTES = {
     ROUTE_HTTP, ROUTE_DNS_CURRENT, ROUTE_DNS_EXPECTED, ROUTE_SCREENSHOT,
-    ROUTE_LOG_WRITE, ROUTE_LOGS_RECENT, ROUTE_DOMAIN_CHECK, ROUTE_DAILY_RUN,
+    ROUTE_DOMAIN_CHECK, ROUTE_DAILY_RUN,
 }
 
 # route -> exported real-function name (the handler hydrated by python:{module,export})
@@ -44,8 +42,6 @@ ROUTE_EXPORTS = {
     ROUTE_DNS_CURRENT: "dns_current",
     ROUTE_DNS_EXPECTED: "dns_expected",
     ROUTE_SCREENSHOT: "screenshot",
-    ROUTE_LOG_WRITE: "log_write",
-    ROUTE_LOGS_RECENT: "logs_recent",
     ROUTE_DOMAIN_CHECK: "domain_check",
     ROUTE_DAILY_RUN: "daily_run",
 }
@@ -76,20 +72,10 @@ def test_dns_current_rejects_provider():
     assert "provider" in out["error"]
 
 
-def test_log_write_and_recent_roundtrip_tmp_db(tmp_path):
-    db = str(tmp_path / "dm.sqlite")
-    written = log_write(stream="daily", event="hello", detail={"k": "v"}, db=db)
-    assert written["ok"] is True
-    recent = logs_recent(stream="daily", limit=5, db=db)
-    assert recent["ok"] is True
-    events = [row.get("event") for row in recent["logs"]]
-    assert "hello" in events
-
-
-def test_log_write_requires_event(tmp_path):
-    db = str(tmp_path / "dm.sqlite")
-    out = log_write(stream="daily", event="", db=db)
-    assert out["ok"] is False
+def test_no_log_routes_owned_by_sqlite_context():
+    # domain-monitor must NOT expose log:// routes — they belong to sqlite-context.
+    # Exposing duplicates was an exact-URI collision (urirun connectors doctor).
+    assert not any(uri.startswith("log://") for uri in urirun_bindings()["bindings"])
 
 
 # --- v2 authoring contract: isolated handlers (registry-portable) ----------
@@ -106,7 +92,6 @@ def test_bindings_are_isolated_handlers():
     # input schemas equal the handler signatures (route contracts unchanged).
     expected_props = b[ROUTE_DNS_EXPECTED]["inputSchema"]["properties"]
     assert set(expected_props) == {"expected_records", "expected_a", "expected_aaaa"}
-    assert b[ROUTE_LOGS_RECENT]["inputSchema"]["properties"]["limit"]["default"] == 20
     json.dumps(urirun_bindings())  # serializable: no live ref leaks
 
 
@@ -132,27 +117,11 @@ def test_runtime_executes_offline_route_from_compiled_registry():
     assert data["expectedRecords"]["A"] == ["203.0.113.10"]
 
 
-def test_runtime_executes_log_route_on_tmp_db(tmp_path):
-    # a log route runs against a tmp SQLite db — no network either.
-    db = str(tmp_path / "dm.sqlite")
-    log_write(stream="daily", event="from-test", db=db)
-
-    registry = urirun.compile_registry(json.loads(json.dumps(urirun_bindings())))
-    policy = urirun.policy(allow=["log://*"])
-    env = v2.run(ROUTE_LOGS_RECENT, registry,
-                 payload={"stream": "daily", "limit": 5, "db": db},
-                 mode="execute", policy=policy)
-    assert env["ok"] is True
-    data = urirun.result_data(env)
-    assert data["ok"] is True
-    assert "from-test" in [row.get("event") for row in data["logs"]]
-
-
 def test_manifest_prose_plus_derived_routes():
     m = connector_manifest()
     assert m["id"] == "domain-monitor"
     assert set(m["routes"]) == ALL_ROUTES
-    assert set(m["uriSchemes"]) >= {"monitor", "browser", "log", "flow"}
+    assert set(m["uriSchemes"]) == {"monitor", "browser", "flow"}  # no log:// (owned by sqlite-context)
     assert m["summary"]  # prose preserved
     assert m["install"]["mode"] == "urirun-extra"
     json.dumps(m)
