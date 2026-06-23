@@ -8,5 +8,21 @@
   "install": {
     "mode": "urirun-extra",
     "pipSpec": "urirun-connector-domain-monitor @ git+https://github.com/if-uri/urirun-connector-domain-monitor.git@v0.2.1"
-  }
+  },
+  "routes": [
+    "browser://host/page/command/screenshot",
+    "flow://host/daily/command/run",
+    "flow://host/domain/command/check",
+    "monitor://host/dns/query/current",
+    "monitor://host/dns/query/expected",
+    "monitor://host/http/query/status"
+  ],
+  "uriSchemes": [
+    "browser",
+    "flow",
+    "monitor"
+  ],
+  "adapterKinds": [
+    "local-function"
+  ]
 }
