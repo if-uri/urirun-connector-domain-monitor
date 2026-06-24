@@ -94,7 +94,9 @@ def screenshot(domain: str = "", url: str = "", db: str = "", screenshot_dir: st
     target = domain or "localhost"
     artifact = capture_screenshot_artifact(db=db or None, domain=target, url=url or default_url(target),
                                            out_dir=screenshot_dir or None, reason=reason, meta=meta or {})
-    return {"ok": True, "connector": CONNECTOR_ID, "type": "domain-monitor", "artifact": artifact}
+    # A screenshot is a frozen artifact (shared urirun.tag contract), never a live widget.
+    return urirun.tag({"ok": True, "connector": CONNECTOR_ID, "type": "domain-monitor", "artifact": artifact},
+                      "screenshot")
 
 
 @FLOW.handler("domain/command/check", isolated=True, meta={"label": "Run domain check flow"})

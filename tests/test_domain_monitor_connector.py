@@ -134,3 +134,13 @@ def test_cli_bindings_and_manifest(capsys):
     assert ALL_ROUTES <= set(json.loads(capsys.readouterr().out)["bindings"])
     assert main(["manifest"]) == 0
     assert json.loads(capsys.readouterr().out)["id"] == "domain-monitor"
+
+
+def test_screenshot_tagged_as_frozen_artifact(monkeypatch):
+    import urirun_connector_domain_monitor.core as core
+    monkeypatch.setattr(core, "capture_screenshot_artifact",
+                        lambda **kw: {"path": "/tmp/x.png", "uri": "artifact://host/screenshot/x"})
+    r = core.screenshot(domain="example.com")
+    assert r["ok"] is True
+    # Shared urirun.tag contract: a screenshot is a frozen artifact.
+    assert r["kind"] == "screenshot" and r["live"] is False
