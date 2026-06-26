@@ -20,7 +20,7 @@ from __future__ import annotations
 from typing import Any
 
 import urirun
-from urirun.host import domain_monitor as _dm
+from urirun_connector_domain_monitor import host_service as _dm
 
 CONNECTOR_ID = "domain-monitor"
 MONITOR = urirun.connector(CONNECTOR_ID, scheme="monitor")
@@ -31,7 +31,7 @@ FLOW = urirun.connector(CONNECTOR_ID, scheme="flow")
 # backend; exposing duplicate `log://` routes only shadowed sqlite-context's in a
 # merged registry (an exact-URI collision flagged by `urirun connectors doctor`).
 
-# Reuse the urirun host backend (single source of truth).
+# Reuse the host service backend (single source of truth — host_service.py).
 default_url = _dm.default_url
 probe_http_status = _dm.http_status
 resolve_dns_records = _dm.dns_records
